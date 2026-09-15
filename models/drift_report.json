@@ -1,0 +1,8 @@
+{
+  "total_features": 20,
+  "drifted_features": 2,
+  "drift_percentage": 10.0,
+  "original_auc": 0.8381,
+  "production_auc": 0.5039,
+  "performance_drop": 0.3342,
+  "action_required": 
