@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, roc_auc_score, roc_curve
 import matplotlib.pyplot as plt
 import joblib
@@ -30,15 +30,10 @@ xgb_model = xgb.XGBClassifier(
     learning_rate=0.1,
     scale_pos_weight=3,  # Handle class imbalance
     random_state=42,
-    eval_metric='logloss',
-    use_label_encoder=False
+    eval_metric='logloss'
 )
 
-xgb_model.fit(
-    X_train, y_train,
-    eval_set=[(X_test, y_test)],
-    verbose=False
-)
+xgb_model.fit(X_train, y_train)  # no test set in fit: keep it untouched for evaluation
 
 print("   ✓ XGBoost trained")
 
@@ -76,12 +71,20 @@ print(f"   {'Random Forest (Tuned)':<25} {rf_acc:<12.4f} {rf_auc:<12.4f}")
 print(f"   {'XGBoost':<25} {test_acc:<12.4f} {test_auc:<12.4f}")
 
 # Select best model
-best_auc = max(lr_auc, rf_auc, test_auc)
-if best_auc == test_auc:
+# Select on 5-fold CV AUC over the TRAIN set (not the test set) to avoid selection bias
+cv_auc = {
+    'xgb': cross_val_score(xgb.XGBClassifier(**xgb_model.get_params()), X_train, y_train, cv=5, scoring='roc_auc').mean(),
+    'rf': cross_val_score(rf_model, X_train, y_train, cv=5, scoring='roc_auc').mean(),
+    'lr': cross_val_score(lr_model, X_train, y_train, cv=5, scoring='roc_auc').mean(),
+}
+print(f"   CV ROC-AUC (train): {cv_auc}")
+best_key = max(cv_auc, key=cv_auc.get)
+best_auc = {'xgb': test_auc, 'rf': rf_auc, 'lr': lr_auc}[best_key]
+if best_key == 'xgb':
     print(f"\n   🏆 XGBoost is the BEST model! (AUC: {test_auc:.4f})")
     production_model = xgb_model
     production_model_name = "XGBoost"
-elif best_auc == rf_auc:
+elif best_key == 'rf':
     print(f"\n   🏆 Random Forest is still BEST (AUC: {rf_auc:.4f})")
     production_model = rf_model
     production_model_name = "Random Forest"
@@ -127,6 +130,7 @@ plt.savefig('figures/09_shap_beeswarm.png', dpi=300, bbox_inches='tight')
 plt.close()
 print("   ✓ Saved: figures/09_shap_beeswarm.png")
 
+print(f"lr_model: {type(lr_model).__name__}, rf_model: {type(rf_model).__name__}, xgb_model: {type(xgb_model).__name__}")
 # Plot 3: ROC Comparison
 plt.figure(figsize=(10, 6))
 for model, proba, name in [

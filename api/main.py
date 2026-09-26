@@ -92,6 +92,16 @@ class HealthResponse(BaseModel):
     model: str
     version: str
 
+FEATURE_ORDER = list(scaler.feature_names_in_)  # exact training column order
+
+def build_features(customer: CustomerData) -> pd.DataFrame:
+    """Reproduce src/feature_engineering.py: label-encode, order columns, scale."""
+    row = customer.dict()
+    for col, encoder in label_encoders.items():
+        row[col + '_encoded'] = int(encoder.transform([row[col]])[0])
+    X = pd.DataFrame([[row[f] for f in FEATURE_ORDER]], columns=FEATURE_ORDER)
+    return pd.DataFrame(scaler.transform(X), columns=FEATURE_ORDER)
+
 # ===== ENDPOINTS =====
 
 @app.get("/health", response_model=HealthResponse)
@@ -101,50 +111,14 @@ def health_check():
     """
     return {
         "status": "healthy",
-        "model": "Random Forest (Tuned)",
+        "model": type(model).__name__,
         "version": "1.0.0"
     }
 
 @app.post("/predict", response_model=ChurnPredictionResponse)
 def predict_churn(customer: CustomerData):
     try:
-        customer_dict = customer.dict()
-        customer_df = pd.DataFrame([customer_dict])
-        
-        categorical_cols = ['gender', 'Partner', 'Dependents', 'PhoneService', 
-                           'InternetService', 'OnlineSecurity', 'OnlineBackup',
-                           'DeviceProtection', 'TechSupport', 'StreamingTV', 
-                           'StreamingMovies', 'Contract', 'PaperlessBilling',
-                           'PaymentMethod', 'MultipleLines']
-        
-        for col in categorical_cols:
-            if col in label_encoders:
-                customer_df[col + '_encoded'] = label_encoders[col].transform(customer_df[[col]]).ravel()
-        
-        expected_features = [
-            "SeniorCitizen", "tenure", "MonthlyCharges",
-            "customerID_encoded",
-            "gender_encoded", "Partner_encoded", "Dependents_encoded", 
-            "PhoneService_encoded", "MultipleLines_encoded", "InternetService_encoded",
-            "OnlineSecurity_encoded", "OnlineBackup_encoded", "DeviceProtection_encoded",
-            "TechSupport_encoded", "StreamingTV_encoded", "StreamingMovies_encoded",
-            "Contract_encoded", "PaperlessBilling_encoded", "PaymentMethod_encoded",
-            "TotalCharges_encoded"
-        ]
-        
-        feature_values = []
-        for feat in expected_features:
-            if feat == "customerID_encoded":
-                feature_values.append(0)  # Default customerID
-            elif feat == "TotalCharges_encoded":
-                feature_values.append(customer_df["TotalCharges"].values[0])
-            elif feat in customer_df.columns:
-                feature_values.append(customer_df[feat].values[0])
-            else:
-                feature_values.append(0)
-        
-        X_input = pd.DataFrame([feature_values], columns=expected_features)
-        X_scaled = scaler.transform(X_input)
+        X_scaled = build_features(customer)
         
         churn_prob = float(model.predict_proba(X_scaled)[0][1])
         
@@ -165,23 +139,7 @@ def predict_batch(customers: List[CustomerData]):
     predictions = []
     
     for customer in customers:
-        customer_dict = customer.dict()
-        customer_df = pd.DataFrame([customer_dict])
-        
-        # Encode categorical variables
-        for col, encoder in label_encoders.items():
-            if col in customer_df.columns:
-                customer_df[col + '_encoded'] = encoder.transform(customer_df[col])
-        
-        # Drop original categorical columns
-        categorical_cols = [col for col in customer_df.columns if col in label_encoders.keys()]
-        customer_df = customer_df.drop(columns=categorical_cols)
-        
-        # Scale features
-        customer_scaled = pd.DataFrame(
-            scaler.transform(customer_df),
-            columns=customer_df.columns
-        )
+        customer_scaled = build_features(customer)
         
         # Make prediction
         prob = float(model.predict_proba(customer_scaled)[0][1])

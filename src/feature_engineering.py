@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 import joblib
 
@@ -11,6 +12,13 @@ print(f"\n✅ Loaded {len(df)} rows")
 
 # ===== STEP 1: Handle Categorical Variables =====
 print("\n1. ENCODING CATEGORICAL VARIABLES")
+
+# TotalCharges is numeric; it was stored as text (blank for tenure-0 customers),
+# which made it get label-encoded as if it were a category. Blank = no charges yet.
+df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce').fillna(0.0)
+
+# customerID is a unique identifier, not a signal - encoding it only adds noise/leakage risk
+df = df.drop(columns=['customerID'])
 
 categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
 # Remove Churn (it's the target)
@@ -50,9 +58,13 @@ print(f"   Feature columns: {X.columns.tolist()}")
 print("\n3. SCALING NUMERIC FEATURES")
 
 # Scale all features (important for distance-based algorithms)
+# Fit the scaler on the training rows only (same split as the training scripts:
+# test_size=0.2, random_state=42, stratify=y) so test statistics do not leak in.
+train_idx, _ = train_test_split(X.index, test_size=0.2, random_state=42, stratify=y)
 scaler = StandardScaler()
+scaler.fit(X.loc[train_idx])
 X_scaled = pd.DataFrame(
-    scaler.fit_transform(X),
+    scaler.transform(X),
     columns=X.columns,
     index=X.index
 )

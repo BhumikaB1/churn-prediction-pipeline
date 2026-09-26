@@ -95,14 +95,18 @@ print(f"    Feature importance saved")
 
 # ===== COMPARISON =====
 print("\n6. MODEL COMPARISON")
+lr_model = joblib.load('models/logistic_regression_baseline.pkl')
+lr_proba = lr_model.predict_proba(X_test)[:, 1]
+lr_test_auc = roc_auc_score(y_test, lr_proba)
+lr_test_acc = lr_model.score(X_test, y_test)  # default 0.5 threshold, same as RF
 print("\n   Logistic Regression vs Random Forest:")
 print(f"   {'Metric':<20} {'Logistic Reg':<15} {'Random Forest':<15}")
 print(f"   {'-'*50}")
-print(f"   {'Test Accuracy':<20} {0.7980:<15.4f} {test_acc_rf:<15.4f}")
-print(f"   {'Test ROC-AUC':<20} {0.8406:<15.4f} {test_auc_rf:<15.4f}")
+print(f"   {'Test Accuracy':<20} {lr_test_acc:<15.4f} {test_acc_rf:<15.4f}")
+print(f"   {'Test ROC-AUC':<20} {lr_test_auc:<15.4f} {test_auc_rf:<15.4f}")
 
-if test_auc_rf > 0.8406:
-    print(f"\n    Random Forest is BETTER (AUC +{(test_auc_rf - 0.8406)*100:.2f}%)")
+if test_auc_rf > lr_test_auc:
+    print(f"\n    Random Forest is BETTER (AUC +{(test_auc_rf - lr_test_auc)*100:.2f}%)")
 else:
     print(f"\n    Logistic Regression is simpler and performs well")
 
@@ -113,13 +117,16 @@ fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
 # Plot 1: ROC Curve Comparison
 from sklearn.linear_model import LogisticRegression
-lr_model = joblib.load('models/logistic_regression_baseline.pkl')
-y_pred_proba_lr = lr_model.predict_proba(X_test)[:, 1]
+y_pred_proba_lr = lr_proba
 fpr_lr, tpr_lr, _ = roc_curve(y_test, y_pred_proba_lr)
 auc_lr = roc_auc_score(y_test, y_pred_proba_lr)
 
 fpr_rf, tpr_rf, _ = roc_curve(y_test, y_pred_proba_test_rf)
 auc_rf = roc_auc_score(y_test, y_pred_proba_test_rf)
+print(f"LR AUC: {auc_lr:.4f}")
+print(f"RF AUC: {auc_rf:.4f}")
+print(f"lr_model: {type(lr_model).__name__}, rf_model: {type(rf_model).__name__}")
+
 
 axes[0, 0].plot(fpr_lr, tpr_lr, label=f'Logistic Reg (AUC = {auc_lr:.3f})', linewidth=2)
 axes[0, 0].plot(fpr_rf, tpr_rf, label=f'Random Forest (AUC = {auc_rf:.3f})', linewidth=2)
@@ -154,8 +161,8 @@ axes[1, 0].set_title('Top 10 Feature Importance - Random Forest')
 
 # Plot 4: Accuracy Comparison
 models = ['Logistic Reg', 'Random Forest']
-accuracies = [0.7980, test_acc_rf]
-aucs = [0.8406, test_auc_rf]
+accuracies = [lr_test_acc, test_acc_rf]
+aucs = [lr_test_auc, test_auc_rf]
 
 x = np.arange(len(models))
 width = 0.35

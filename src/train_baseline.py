@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (classification_report, confusion_matrix, 
-                             roc_auc_score, roc_curve, auc)
+                             roc_auc_score, roc_curve, auc, accuracy_score)
 import matplotlib.pyplot as plt
 import joblib
 
@@ -25,6 +25,9 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
 
+# Define your new custom prediction threshold here
+CUSTOM_THRESHOLD = 0.35
+
 print(f"   Training set: {X_train.shape[0]} samples ({X_train.shape[1]} features)")
 print(f"   Test set: {X_test.shape[0]} samples")
 print(f"   Train churn rate: {y_train.mean():.2%}")
@@ -43,25 +46,31 @@ print(f"   Intercept: {model.intercept_[0]:.4f}")
 # ===== STEP 3: Predictions =====
 print("\n3. MAKING PREDICTIONS")
 
-y_pred_train = model.predict(X_train)
-y_pred_test = model.predict(X_test)
+# Get raw probability distributions
 y_pred_proba_train = model.predict_proba(X_train)[:, 1]
 y_pred_proba_test = model.predict_proba(X_test)[:, 1]
 
+# Manually enforce custom threshold rules
+y_pred_train = (y_pred_proba_train >= CUSTOM_THRESHOLD).astype(int)
+y_pred_test = (y_pred_proba_test >= CUSTOM_THRESHOLD).astype(int)
+
+print(f"   Applied Operational Threshold: {CUSTOM_THRESHOLD}")
 print(f"   Training predictions made")
 print(f"   Test predictions made")
 
 # ===== STEP 4: Evaluation =====
 print("\n4. MODEL EVALUATION")
 
-# Accuracy
-train_acc = model.score(X_train, y_train)
-test_acc = model.score(X_test, y_test)
-print(f"\n   ACCURACY:")
+# Accuracy (Uses manual match checks instead of internal default 0.5 rules)
+train_acc = accuracy_score(y_train, y_pred_train)
+test_acc = accuracy_score(y_test, y_pred_test)
+print(f"\n   ACCURACY (at {CUSTOM_THRESHOLD}):")
 print(f"   - Train: {train_acc:.4f}")
 print(f"   - Test:  {test_acc:.4f}")
+print(f"   ACCURACY (at default 0.5, comparable to other models): "
+      f"{accuracy_score(y_test, (y_pred_proba_test >= 0.5).astype(int)):.4f}")
 
-# ROC-AUC (better metric for imbalanced data)
+# ROC-AUC (Remains completely identical to your baseline)
 train_auc = roc_auc_score(y_train, y_pred_proba_train)
 test_auc = roc_auc_score(y_test, y_pred_proba_test)
 print(f"\n   ROC-AUC:")
@@ -143,6 +152,7 @@ axes[1, 0].axvline(x=0, color='black', linestyle='-', linewidth=0.5)
 # Plot 4: Prediction Distribution
 axes[1, 1].hist(y_pred_proba_test[y_test == 0], bins=30, alpha=0.6, label='No Churn', color='green')
 axes[1, 1].hist(y_pred_proba_test[y_test == 1], bins=30, alpha=0.6, label='Churn', color='red')
+axes[1, 1].axvline(x=CUSTOM_THRESHOLD, color='blue', linestyle='--', label=f'Threshold ({CUSTOM_THRESHOLD})')
 axes[1, 1].set_xlabel('Predicted Churn Probability')
 axes[1, 1].set_ylabel('Frequency')
 axes[1, 1].set_title('Prediction Probability Distribution')

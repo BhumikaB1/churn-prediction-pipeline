@@ -28,14 +28,14 @@ param_grid = {
     'class_weight': ['balanced', None]
 }
 
-print(f"   Testing {50*3*3*2*2} combinations...")
+print(f"   Testing {3*3*2*2} combinations...")
 
 grid_search = GridSearchCV(
-    RandomForestClassifier(random_state=42, n_jobs=-1),
+    RandomForestClassifier(random_state=42, n_jobs=1),
     param_grid,
     cv=5,  # 5-fold cross-validation
     scoring='roc_auc',
-    n_jobs=-1,
+    n_jobs=1,
     verbose=1
 )
 
